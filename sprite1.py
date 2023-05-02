@@ -30,6 +30,7 @@ class Sapo(pygame.sprite.Sprite):
         self.atual = 0
         self.image = self.sprites[self.atual]
         self.rect = self.image.get_rect()
+        self.rect.topleft = -30,150
 
         self.animar = False
 
@@ -50,6 +51,9 @@ todas_sprites = pygame.sprite.Group()
 sapo = Sapo()
 todas_sprites.add(sapo)
 
+background = pygame.image.load('background1.jpg').convert()
+background = pygame.transform.scale(background,(largura,altura))
+
 while True:
     relogio.tick(60)
     tela.fill((0,0,0))
@@ -60,6 +64,8 @@ while True:
         if event.type == KEYDOWN:
             if event.key == K_j:
                 sapo.atacar()
+
+    tela.blit(background,(0,0))     
     todas_sprites.draw(tela)
     todas_sprites.update()
     pygame.display.flip()
