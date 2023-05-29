@@ -2,88 +2,209 @@ import pygame
 from pygame.locals import *
 from sys import exit
 from pygame.sprite import Group
+import random
 import os
-
+#Configuração inicial
 diretorio_principal = os.path.dirname(__file__)  #caminho absoluto do script
 diretorio_personagem = os.path.join(diretorio_principal,'spritesheet personagem')
+diretorio_sprites = os.path.join(diretorio_principal,'sprites')
 diretorio_sons = os.path.join(diretorio_principal, 'sons')
 
 pygame.init()
-
 LARGURA = 800
 ALTURA = 640
 TELA = pygame.display.set_mode((LARGURA, ALTURA))
 pygame.display.set_caption("sprite2")
 relogio = pygame.time.Clock()
+#Fonte
+branco = pygame.font.Font("fonts/vazio.ttf",15)
+preto = pygame.font.Font("fonts/cheio.ttf",15)
 
-sprite_sheet = pygame.image.load(os.path.join(diretorio_personagem, 'andar.png')).convert_alpha()
+#pontuação
+pontuacao = 0
+
+#Sprites
+sprite_protagonista = pygame.image.load(os.path.join(diretorio_personagem, 'andar.png')).convert_alpha()
+sprite_tsunami = pygame.image.load(os.path.join(diretorio_sprites, 'tsunami.png')).convert_alpha()
+sprite_fireball = pygame.image.load(os.path.join(diretorio_sprites, 'fireball.png')).convert_alpha()
 
 class Protagonista(pygame.sprite.Sprite):
 
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
+
+        #som do pulo
         self.som_pulo = pygame.mixer.Sound(os.path.join(diretorio_sons,'coin.wav'))
         self.som_pulo.set_volume(1)
+        
+        #animação
         self.imagens_protagonista = []
         for i in range(6):
-            img = sprite_sheet.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
-            img = pygame.transform.scale(img,(35,70)) #mudar tamanho de cada sprite
+            img = sprite_protagonista.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
+            img = pygame.transform.scale(img,(35,60)) #mudar tamanho de cada sprite
             self.imagens_protagonista.append(img) #armazenar sprites em um array
-
-        self.index_lista_andar = 0
+        
+        #iniciação
         self.index_lista_andar = 0
         self.image = self.imagens_protagonista[self.index_lista_andar] #render
         self.rect = self.image.get_rect() 
-        self.rect.center = (50,ALTURA-70) #posição inicial do protagonista
+        self.rect.center = (100,ALTURA-200) #posição inicial do protagonista
+
+        #variáveis do pulo
+        self.vel_y = 0
+        self.is_jumping = False
+        self.jump_start_time = 0
+        self.JUMP_HEIGHT = -10
+        self.MAX_JUMP_TIME = 50  # Tempo máximo de salto em milissegundos
+        self.GRAVITY = 0.8
         
-        self.limite = 350
-        self.no_ar = False #detecção para pulo
-        self.pos_y_inicial = ALTURA-70-160//2
-        
+        #variáveis do andamento
         self.andamento = False
 
-    
     def andar(self):
         self.andamento = True
         if self.index_lista_andar > 5:    
             self.index_lista_andar = 0 #voltar para primeiro sprite
         self.index_lista_andar += 0.07
-  
-    def movimentar(self):
-        if pygame.key.get_pressed()[K_a]:
-            self.andar()
-            self.rect.x -= 5
-        if pygame.key.get_pressed()[K_d]:
-            self.andar()
-            self.rect.x += 5
-
-    def pular(self):
-        self.no_ar = True
-        self.som_pulo.play()
     
+    def pular(self):
+        if not self.is_jumping:
+            self.is_jumping = True
+            self.jump_start_time = pygame.time.get_ticks()
+            
+    def movimentar(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            self.andar()
+            self.rect.x -= 4.5
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            self.andar()
+            self.rect.x += 4.5
+            
     def update(self):
-        if self.no_ar == True:
-            if self.rect.top <= 250:
-                self.no_ar = False
-            self.rect.y -= 10
-        else:
-            if self.rect.y < self.pos_y_inicial:
-                self.rect.y += 10
+        if self.is_jumping:
+            jump_duration = pygame.time.get_ticks() - self.jump_start_time
+            if jump_duration <= self.MAX_JUMP_TIME:
+                self.vel_y = self.JUMP_HEIGHT
             else:
-                self.rect.y = self.pos_y_inicial
+                self.is_jumping = False
+
+        self.rect.y += self.vel_y
+        self.vel_y += self.GRAVITY
+
+        if self.rect.y >= ALTURA - 100:
+            self.rect.y = ALTURA - 100
+            self.vel_y = 0
+
         if self.andamento == True:
             self.andar()
             self.image = self.imagens_protagonista[int(self.index_lista_andar)] #animação
             self.andamento = False
+        
+class Tsunami(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.imagens_tsunami = []
+        for i in range(4):
+            img = sprite_tsunami.subsurface((i * 213, 0), (213, 204)) #usar spritesheet
+            img = pygame.transform.scale(img,(600,750)) #mudar tamanho de cada sprite
+            self.imagens_tsunami.append(img) #armazenar sprites em um array
 
+        self.index_lista_aproximar = 0
+        self.image = self.imagens_tsunami[self.index_lista_aproximar] #render
+        self.rect = self.image.get_rect() 
+        self.rect.center = (0,ALTURA-250) #posição inicial do protagonista
+        self.velocidade = 0 
 
+    def aproximar(self):
+        if self.index_lista_aproximar > 3:    
+            self.index_lista_aproximar = 0 #voltar para primeiro sprite
+        self.index_lista_aproximar += 0.02
+
+        self.velocidade += 0.25
+
+        if self.velocidade == 1:
+            self.velocidade = 0
+            self.rect.x += 1
+
+        if self.rect.colliderect(protagonista):
+            print("morreu")
+        
+    def update(self):
+        self.aproximar()
+        self.image = self.imagens_tsunami[int(self.index_lista_aproximar)] #animação
+
+class Mapa(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("back2 (1).png").convert()
+        self.image = pygame.transform.scale(self.image,(LARGURA*2,ALTURA)) #mudar tamanho de cada sprite
+        self.rect = self.image.get_rect(x=0,y=0)
+
+    def update(self):
+        if self.rect.x < -LARGURA:
+            self.rect.x = 0
+        self.rect.x -= 3
+
+class Fireball(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("fireball.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image,(60,30)) #mudar tamanho de cada sprite
+        self.image = pygame.transform.rotate(self.image,180)
+        self.pos_init = random.randrange(50,ALTURA-100)
+        self.velocidade = random.randrange(2,7)
+        self.rect = self.image.get_rect(x=LARGURA,y=self.pos_init)
+        self.rect.y = random.randrange(50,ALTURA-100)
+    
+    def voltar(self):
+        self.rect.x = LARGURA
+        self.rect.y= random.randrange(50,ALTURA-70)
+        self.velocidade = random.randrange(2,7)
+
+    def update(self):
+        if self.rect.topright[0] < 0 or self.rect.colliderect(protagonista):
+            self.voltar()
+            global pontuacao
+            pontuacao -= 200
+        self.rect.x -= self.velocidade
+
+class Star(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("coracao.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image,(40,40)) #mudar tamanho de cada sprite
+        self.pos_init = random.randrange(50,ALTURA-100)
+        self.velocidade = random.randrange(1,7)
+        self.rect = self.image.get_rect(x=LARGURA,y=self.pos_init)
+        self.rect.y = random.randrange(50,ALTURA-100)
+
+    def voltar(self):
+        self.rect.x = LARGURA
+        self.rect.y= random.randrange(50,ALTURA-70)
+        self.velocidade = random.randrange(2,7)
+
+    def update(self):
+        if self.rect.topright[0] < 0 or self.rect.colliderect(protagonista):
+            self.voltar()
+            global pontuacao
+            pontuacao += 100
+        self.rect.x -= self.velocidade
+
+#Criar imagens
 todas_sprites = pygame.sprite.Group()
 protagonista = Protagonista()
-todas_sprites.add(protagonista)
+mapa = Mapa()
+todas_sprites.add(mapa, protagonista)
+for i in range(6):
+    fireball = Fireball()
+    todas_sprites.add(fireball)
 
-background = pygame.image.load('back.jpg').convert()
-background = pygame.transform.scale(background, (LARGURA, ALTURA))
+for i in range(5):
+    star = Star()
+    todas_sprites.add(star)
 
+#Play
 while True:
     relogio.tick(60)
     TELA.fill((0, 0, 0))
@@ -91,19 +212,13 @@ while True:
         if event.type == QUIT:
             pygame.quit()
             exit()
-        if pygame.key.get_pressed()[K_SPACE]:
-            if protagonista.rect.y <= protagonista.limite:
-                pass
-            else:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
                 protagonista.pular()
-        '''if event.type == KEYDOWN:
-            if event.key == K_SPACE:
-                if protagonista.rect.y != protagonista.pos_y_inicial:
-                    pass
-                else:
-                    protagonista.pular()'''
+    
+    pontos = preto.render("Pontos:{}".format(pontuacao),False,(0,0,0))
     protagonista.movimentar()
-    TELA.blit(background, (0, 0))
     todas_sprites.draw(TELA)
     todas_sprites.update()
+    TELA.blit(pontos,(650,20))
     pygame.display.flip()
