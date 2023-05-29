@@ -33,22 +33,14 @@ class Protagonista(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
 
-        #som do pulo
-        self.som_pulo = pygame.mixer.Sound(os.path.join(diretorio_sons,'coin.wav'))
-        self.som_pulo.set_volume(1)
-        
-        #animação
-        self.imagens_protagonista = []
-        for i in range(6):
-            img = sprite_protagonista.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
-            img = pygame.transform.scale(img,(35,60)) #mudar tamanho de cada sprite
-            self.imagens_protagonista.append(img) #armazenar sprites em um array
-        
-        #iniciação
-        self.index_lista_andar = 0
-        self.image = self.imagens_protagonista[self.index_lista_andar] #render
-        self.rect = self.image.get_rect() 
-        self.rect.center = (100,ALTURA-200) #posição inicial do protagonista
+        #Vida do personagem
+        self.vida = 5
+        self.coracao_img = pygame.image.load("coracao.png").convert_alpha()
+        self.coracao_img = pygame.transform.scale(self.coracao_img,(40,40)) 
+        self.coracao_x = 10
+        self.coracao_y = 10
+        self.espaco_coracao = 40
+        self.tela = pygame.display.set_mode((LARGURA, ALTURA))
 
         #variáveis do pulo
         self.vel_y = 0
@@ -60,6 +52,21 @@ class Protagonista(pygame.sprite.Sprite):
         
         #variáveis do andamento
         self.andamento = False
+
+        #som do pulo
+        self.som_pulo = pygame.mixer.Sound(os.path.join(diretorio_sons,'coin.wav'))
+        self.som_pulo.set_volume(1)
+        
+        #animação
+        self.imagens_protagonista = []
+        for i in range(6):
+            img = sprite_protagonista.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
+            img = pygame.transform.scale(img,(30,60)) #mudar tamanho de cada sprite
+            self.imagens_protagonista.append(img) #armazenar sprites em um array
+        self.index_lista_andar = 0
+        self.image = self.imagens_protagonista[self.index_lista_andar] #render
+        self.rect = self.image.get_rect() 
+        self.rect.center = (100,ALTURA-200) #posição inicial do protagonista
 
     def andar(self):
         self.andamento = True
@@ -82,6 +89,20 @@ class Protagonista(pygame.sprite.Sprite):
             self.rect.x += 4.5
             
     def update(self):
+        # vida do personagem
+        if self.vida > 5:
+            self.vida = 5
+        if self.vida < 0:
+            self.vida = 0
+
+
+        for i in range(self.vida):
+            coracao_rect = self.coracao_img.get_rect()
+            coracao_rect.x = self.coracao_x + i * self.espaco_coracao
+            coracao_rect.y = self.coracao_y
+            self.tela.blit(self.coracao_img, coracao_rect)
+
+        # pulo
         if self.is_jumping:
             jump_duration = pygame.time.get_ticks() - self.jump_start_time
             if jump_duration <= self.MAX_JUMP_TIME:
@@ -96,6 +117,7 @@ class Protagonista(pygame.sprite.Sprite):
             self.rect.y = ALTURA - 100
             self.vel_y = 0
 
+        # andamento
         if self.andamento == True:
             self.andar()
             self.image = self.imagens_protagonista[int(self.index_lista_andar)] #animação
@@ -163,10 +185,13 @@ class Fireball(pygame.sprite.Sprite):
         self.velocidade = random.randrange(2,7)
 
     def update(self):
-        if self.rect.topright[0] < 0 or self.rect.colliderect(protagonista):
+        if self.rect.topright[0] < 0:
+            self.voltar()
+        elif self.rect.colliderect(protagonista):
             self.voltar()
             global pontuacao
             pontuacao -= 200
+            protagonista.vida -= 1
         self.rect.x -= self.velocidade
 
 class Star(pygame.sprite.Sprite):
@@ -185,10 +210,13 @@ class Star(pygame.sprite.Sprite):
         self.velocidade = random.randrange(2,7)
 
     def update(self):
-        if self.rect.topright[0] < 0 or self.rect.colliderect(protagonista):
+        if self.rect.topright[0] < 0:
+            self.voltar()
+        elif self.rect.colliderect(protagonista):
             self.voltar()
             global pontuacao
-            pontuacao += 100
+            pontuacao += 300
+            protagonista.vida += 1
         self.rect.x -= self.velocidade
 
 #Criar imagens
