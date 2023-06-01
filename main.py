@@ -1,32 +1,99 @@
 import pygame
-from pygame.locals import *
-from sys import exit
-from pygame.sprite import Group
+import sys
 import random
 import os
+
 #Configuração inicial
 diretorio_principal = os.path.dirname(__file__)  #caminho absoluto do script
-diretorio_personagem = os.path.join(diretorio_principal,'spritesheet personagem')
+diretorio_personagem = os.path.join(diretorio_principal,'spritesheet')
 diretorio_sprites = os.path.join(diretorio_principal,'sprites')
 diretorio_sons = os.path.join(diretorio_principal, 'sons')
 
+# 初始化Pygame
 pygame.init()
-LARGURA = 800
-ALTURA = 640
+
+# 窗口尺寸
+LARGURA = 900
+ALTURA = 740
 TELA = pygame.display.set_mode((LARGURA, ALTURA))
-pygame.display.set_caption("sprite2")
-relogio = pygame.time.Clock()
-#Fonte
-branco = pygame.font.Font("fonts/vazio.ttf",15)
-preto = pygame.font.Font("fonts/cheio.ttf",15)
 
-#pontuação
-pontuacao = 0
+# 创建窗口
+window = pygame.display.set_mode((LARGURA, ALTURA))
+pygame.display.set_caption("游戏开始界面")
 
-#Sprites
-sprite_protagonista = pygame.image.load(os.path.join(diretorio_personagem, 'andar.png')).convert_alpha()
-sprite_tsunami = pygame.image.load(os.path.join(diretorio_sprites, 'tsunami.png')).convert_alpha()
-sprite_fireball = pygame.image.load(os.path.join(diretorio_sprites, 'fireball.png')).convert_alpha()
+# 背景音乐
+pygame.mixer.music.load("sons/bgm.mp3")
+pygame.mixer.music.set_volume(0.1)
+pygame.mixer.music.play(-1)  # 循环播放背景音乐
+
+# 字体设置
+selected_font = pygame.font.Font("fonts/vazio.ttf", 50)
+selected_font.set_bold(True)
+unselected_font = pygame.font.Font("fonts/cheio.ttf", 50)
+poit_font = pygame.font.Font("fonts/cheio.ttf", 15)
+
+# 选项列表
+options = ["START", "RANK", "SOUND", "QUIT"]
+selected_option = 0
+
+# 游戏是否开启音效
+sound_enabled = True
+
+# 游戏开始界面类
+class StartMenu:
+    def __init__(self):
+        self.pontuacao = 0
+        self.background = pygame.image.load("backgrounds/back1.jpg").convert_alpha()
+        self.background = pygame.transform.scale(self.background,(LARGURA,ALTURA))
+
+    def handle_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.select_option((selected_option - 1) % len(options))
+            elif event.key == pygame.K_DOWN:
+                self.select_option((selected_option + 1) % len(options))
+            elif event.key == pygame.K_RETURN:
+                self.execute_option(selected_option)
+
+    def select_option(self, option):
+        global selected_option
+        selected_option = option
+
+    def execute_option(self, option):
+        if option == 0:
+            game = Game()
+            game.start()
+        elif option == 1:
+            rank = Rank()
+            rank.show()
+        elif option == 2:
+            self.toggle_sound()
+        elif option == 3:
+            pygame.quit()
+            sys.exit()
+
+    def toggle_sound(self):
+        global sound_enabled
+        sound_enabled = not sound_enabled
+        if sound_enabled:
+            pygame.mixer.music.unpause()
+        else:
+            pygame.mixer.music.pause()
+
+    def draw(self, window):
+        window.blit(self.background,(0, 0))
+
+        for i, option in enumerate(options):
+            if i == selected_option:
+                text_surface = selected_font.render(option, True, (0,0,0))
+            else:
+                text_surface = unselected_font.render(option, True, (0,0,0))
+
+            text_rect = text_surface.get_rect()
+            text_rect.center = (LARGURA / 2, 200 + i * 80)
+            window.blit(text_surface, text_rect)
+
+        pygame.display.flip()
 
 class Protagonista(pygame.sprite.Sprite):
 
@@ -34,33 +101,36 @@ class Protagonista(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
 
         #Vida do personagem
+        self.sprite_protagonista = pygame.image.load('spritesheet/andar.png').convert_alpha()
         self.vida = 5
-        self.coracao_img = pygame.image.load("coracao.png").convert_alpha()
+        self.pontuacao = 0
+        self.coracao_img = pygame.image.load("sprites/coracao.png").convert_alpha()
         self.coracao_img = pygame.transform.scale(self.coracao_img,(40,40)) 
+        self.coracao_rect = self.coracao_img.get_rect()
         self.coracao_x = 10
         self.coracao_y = 10
         self.espaco_coracao = 40
-        self.tela = pygame.display.set_mode((LARGURA, ALTURA))
+        self.tela = TELA
 
         #variáveis do pulo
         self.vel_y = 0
         self.is_jumping = False
         self.jump_start_time = 0
         self.JUMP_HEIGHT = -10
-        self.MAX_JUMP_TIME = 50  # Tempo máximo de salto em milissegundos
+        self.MAX_JUMP_TIME = 40  # Tempo máximo de salto em milissegundos
         self.GRAVITY = 0.8
         
         #variáveis do andamento
         self.andamento = False
 
         #som do pulo
-        self.som_pulo = pygame.mixer.Sound(os.path.join(diretorio_sons,'coin.wav'))
+        self.som_pulo = pygame.mixer.Sound('sons/jump.wav')
         self.som_pulo.set_volume(1)
         
         #animação
         self.imagens_protagonista = []
         for i in range(6):
-            img = sprite_protagonista.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
+            img = self.sprite_protagonista.subsurface((i * 87, 0), (87, 160)) #usar spritesheet
             img = pygame.transform.scale(img,(30,60)) #mudar tamanho de cada sprite
             self.imagens_protagonista.append(img) #armazenar sprites em um array
         self.index_lista_andar = 0
@@ -75,6 +145,7 @@ class Protagonista(pygame.sprite.Sprite):
         self.index_lista_andar += 0.07
     
     def pular(self):
+        self.som_pulo.play()
         if not self.is_jumping:
             self.is_jumping = True
             self.jump_start_time = pygame.time.get_ticks()
@@ -95,12 +166,10 @@ class Protagonista(pygame.sprite.Sprite):
         if self.vida < 0:
             self.vida = 0
 
-
         for i in range(self.vida):
             coracao_rect = self.coracao_img.get_rect()
             coracao_rect.x = self.coracao_x + i * self.espaco_coracao
             coracao_rect.y = self.coracao_y
-            self.tela.blit(self.coracao_img, coracao_rect)
 
         # pulo
         if self.is_jumping:
@@ -122,44 +191,22 @@ class Protagonista(pygame.sprite.Sprite):
             self.andar()
             self.image = self.imagens_protagonista[int(self.index_lista_andar)] #animação
             self.andamento = False
-        
-class Tsunami(pygame.sprite.Sprite):
+
+class Boss(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.imagens_tsunami = []
-        for i in range(4):
-            img = sprite_tsunami.subsurface((i * 213, 0), (213, 204)) #usar spritesheet
-            img = pygame.transform.scale(img,(600,750)) #mudar tamanho de cada sprite
-            self.imagens_tsunami.append(img) #armazenar sprites em um array
+        self.image = pygame.image.load("sprites/boss.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image,(100,100))
+        self.image = pygame.transform.rotate(self.image, 50)
+        self.rect = self.image.get_rect(x=LARGURA-150,y=70)
 
-        self.index_lista_aproximar = 0
-        self.image = self.imagens_tsunami[self.index_lista_aproximar] #render
-        self.rect = self.image.get_rect() 
-        self.rect.center = (0,ALTURA-250) #posição inicial do protagonista
-        self.velocidade = 0 
-
-    def aproximar(self):
-        if self.index_lista_aproximar > 3:    
-            self.index_lista_aproximar = 0 #voltar para primeiro sprite
-        self.index_lista_aproximar += 0.02
-
-        self.velocidade += 0.25
-
-        if self.velocidade == 1:
-            self.velocidade = 0
-            self.rect.x += 1
-
-        if self.rect.colliderect(protagonista):
-            print("morreu")
-        
     def update(self):
-        self.aproximar()
-        self.image = self.imagens_tsunami[int(self.index_lista_aproximar)] #animação
+        pass
 
 class Mapa(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.image.load("back2 (1).png").convert()
+        self.image = pygame.image.load("backgrounds/back2.png").convert()
         self.image = pygame.transform.scale(self.image,(LARGURA*2,ALTURA)) #mudar tamanho de cada sprite
         self.rect = self.image.get_rect(x=0,y=0)
 
@@ -169,9 +216,10 @@ class Mapa(pygame.sprite.Sprite):
         self.rect.x -= 3
 
 class Fireball(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self,obj):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.image.load("fireball.png").convert_alpha()
+        self.obj = obj
+        self.image = pygame.image.load("sprites/fireball.png").convert_alpha()
         self.image = pygame.transform.scale(self.image,(60,30)) #mudar tamanho de cada sprite
         self.image = pygame.transform.rotate(self.image,180)
         self.pos_init = random.randrange(50,ALTURA-100)
@@ -181,23 +229,26 @@ class Fireball(pygame.sprite.Sprite):
     
     def voltar(self):
         self.rect.x = LARGURA
-        self.rect.y= random.randrange(50,ALTURA-70)
+        self.rect.y= random.randrange(0,ALTURA-70)
         self.velocidade = random.randrange(2,7)
 
     def update(self):
         if self.rect.topright[0] < 0:
             self.voltar()
-        elif self.rect.colliderect(protagonista):
+        elif self.rect.colliderect(self.obj):
             self.voltar()
-            global pontuacao
-            pontuacao -= 200
-            protagonista.vida -= 1
+            self.obj.vida -= 1
+            self.obj.pontuacao -= 200
+            self.obj.image = pygame.image.load("spritesheet/sofrer.png").convert_alpha()
+            self.obj.image = pygame.transform.scale(self.obj.image,(30,60))
+            pygame.mixer.Sound("sons/fireball.wav").play()
         self.rect.x -= self.velocidade
 
-class Star(pygame.sprite.Sprite):
-    def __init__(self):
+class Food(pygame.sprite.Sprite):
+    def __init__(self,obj):
         pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.image.load("coracao.png").convert_alpha()
+        self.obj = obj
+        self.image = pygame.image.load("sprites/food.png").convert_alpha()
         self.image = pygame.transform.scale(self.image,(40,40)) #mudar tamanho de cada sprite
         self.pos_init = random.randrange(50,ALTURA-100)
         self.velocidade = random.randrange(1,7)
@@ -212,41 +263,124 @@ class Star(pygame.sprite.Sprite):
     def update(self):
         if self.rect.topright[0] < 0:
             self.voltar()
-        elif self.rect.colliderect(protagonista):
+        elif self.rect.colliderect(self.obj):
             self.voltar()
-            global pontuacao
-            pontuacao += 300
-            protagonista.vida += 1
+            self.obj.vida += 1
+            self.obj.pontuacao += 300
+            pygame.mixer.Sound("sons/food.wav").play()
         self.rect.x -= self.velocidade
+# Game
+class Game:
+    def __init__(self):
+        #iniciação dos sprites
+        self.over = False
+        self.todas_sprites = pygame.sprite.Group()
+        self.background = pygame.image.load("backgrounds/back1.jpg").convert()
+        self.protagonista = Protagonista()
+        self.boss = Boss()
+        self.mapa = Mapa()
+        self.pontos = poit_font.render("Pontos:{}".format(self.protagonista.pontuacao), False, (0, 0, 0))
+        self.todas_sprites.add(self.mapa, self.protagonista,self.boss)
+        for i in range(6):
+            fireball = Fireball(self.protagonista)
+            self.todas_sprites.add(fireball)
 
-#Criar imagens
-todas_sprites = pygame.sprite.Group()
-protagonista = Protagonista()
-mapa = Mapa()
-todas_sprites.add(mapa, protagonista)
-for i in range(6):
-    fireball = Fireball()
-    todas_sprites.add(fireball)
+        for i in range(5):
+            food = Food(self.protagonista)
+            self.todas_sprites.add(food)
 
-for i in range(5):
-    star = Star()
-    todas_sprites.add(star)
+    def update(self):
+        self.pontos = poit_font.render("Pontos:{}".format(self.protagonista.pontuacao), False, (0, 0, 0))
+        self.protagonista.movimentar()
+        self.todas_sprites.update()
+        if self.protagonista.vida <= 0:
+            self.over = True
 
-#Play
+    def draw(self):
+        if self.over == False:
+            self.game()
+        if self.over == True:
+            self.gameOver()
+
+    def game(self):
+        self.todas_sprites.draw(TELA)
+        TELA.blit(self.pontos, (LARGURA-180, 20))
+        for i in range(self.protagonista.vida):
+            self.coracao_rect = self.protagonista.coracao_img.get_rect()
+            self.protagonista.coracao_rect.x = self.protagonista.coracao_x + i * self.protagonista.espaco_coracao
+            self.protagonista.coracao_rect.y = self.protagonista.coracao_y
+            TELA.blit(self.protagonista.coracao_img, self.protagonista.coracao_rect)
+        pygame.display.flip()
+
+    def gameOver(self):
+        gameover_text = unselected_font.render("GAME OVER", False, (255, 255, 255))
+        restart_text = poit_font.render("Press Enter to reset", False, (255, 255, 255))
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        self.protagonista.vida = 5
+                        self.over = False
+                        return
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
+
+            TELA.fill((0, 0, 0))
+            TELA.blit(gameover_text, (290, 300))
+            TELA.blit(restart_text, (340, 380))
+            pygame.display.flip()
+
+    def start(self):
+        clock = pygame.time.Clock()
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        self.protagonista.pular()
+            self.update()
+            self.draw()
+            clock.tick(60)
+
+class GameOver():
+    def __init__(self):
+        self.gameover = unselected_font.render("GAME OVER",False,(255,255,255))
+        self.reinciar = poit_font.render("Press Enter para to reset",False,(255,255,255))
+    def gameover(self):
+        TELA.fill(0,0,0)
+        TELA.blit(self.gameover,(500,ALTURA/2))
+        TELA.blit(self.reinciar,(500,ALTURA/2+100))
+
+#Rank
+class Rank:
+    def __init__(self):
+        pass
+
+    def show(self):
+        print("Ranking")
+
+
+# StartMenu
+start_menu = StartMenu()
+game_started = True
+
+#Looping
 while True:
-    relogio.tick(60)
-    TELA.fill((0, 0, 0))
     for event in pygame.event.get():
-        if event.type == QUIT:
+        if event.type == pygame.QUIT:
             pygame.quit()
-            exit()
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                protagonista.pular()
-    
-    pontos = preto.render("Pontos:{}".format(pontuacao),False,(0,0,0))
-    protagonista.movimentar()
-    todas_sprites.draw(TELA)
-    todas_sprites.update()
-    TELA.blit(pontos,(650,20))
-    pygame.display.flip()
+            sys.exit()
+        if game_started:
+            start_menu.handle_event(event)
+            
+    if game_started:
+        start_menu.draw(window)
+        
+    else:
+        start_menu.execute_option(0)
